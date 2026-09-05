@@ -1,98 +1,183 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+type Game = {
+  id: number;
+  date: string;
+  time: string;
+  status: string;
+  status_short: string;
+  home_team: string;
+  away_team: string;
+  home_score: number | null;
+  away_score: number | null;
+  home_logo: string;
+  away_logo: string;
+};
 
 export default function HomeScreen() {
+  const [games, setGames] = useState<Game[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function loadGames() {
+      try {
+        const response = await fetch(
+          'http://127.0.0.1:8000/games/baseball'
+        );
+
+        if (!response.ok) {
+          throw new Error('Could not load baseball games');
+        }
+
+        const data = await response.json();
+
+        setGames(data.games);
+      } catch (err) {
+        setError('Could not connect to the SportsDaily backend.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadGames();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+        <Text style={styles.loadingText}>Loading games...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>TODAY SPORTS</Text>
+      <Text style={styles.sectionTitle}>MLB Games</Text>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+      {games.map((game) => (
+        <View key={game.id} style={styles.gameCard}>
+          <Text style={styles.status}>
+            {game.status_short === 'NS'
+            ? `${game.time} - Upcoming`
+            : game.status}
+          </Text>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+          <View style={styles.teamRow}>
+            <View style={styles.team}>
+              <Image
+                source={{ uri: game.away_logo }}
+                style={styles.logo}
+              />
+              <Text style={styles.teamName}>
+                {game.away_team}
+              </Text>
+            </View>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+            <Text style={styles.score}>
+              {game.away_score ?? '-'}
+            </Text>
+          </View>
+
+          <View style={styles.teamRow}>
+            <View style={styles.team}>
+              <Image
+                source={{ uri: game.home_logo }}
+                style={styles.logo}
+              />
+              <Text style={styles.teamName}>
+                {game.home_team}
+              </Text>
+            </View>
+
+            <Text style={styles.score}>
+              {game.home_score ?? '-'}
+            </Text>
+          </View>
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    padding: 24,
+    backgroundColor: '#f5f5f5',
+    minHeight: '100%',
+  },
+  center: {
     flex: 1,
     justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  loadingText: {
+    marginTop: 12,
+  },
+  errorText: {
+    fontSize: 18,
   },
   title: {
+    fontSize: 38,
+    fontWeight: 'bold',
     textAlign: 'center',
+    marginBottom: 24,
   },
-  code: {
-    textTransform: 'uppercase',
+  sectionTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    marginBottom: 16,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  gameCard: {
+    backgroundColor: 'white',
+    padding: 18,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  status: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  teamRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 6,
+  },
+  team: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logo: {
+    width: 36,
+    height: 36,
+    resizeMode: 'contain',
+  },
+  teamName: {
+    fontSize: 18,
+  },
+  score: {
+    fontSize: 22,
+    fontWeight: 'bold',
   },
 });
