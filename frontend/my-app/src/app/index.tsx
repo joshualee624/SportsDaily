@@ -22,31 +22,118 @@ type Game = {
   away_logo: string;
 };
 
+type GameSectionProps = {
+  title: string;
+  games: Game[];
+  emptyMessage: string;
+};
+
+function GameSection({
+  title,
+  games,
+  emptyMessage,
+}: GameSectionProps) {
+  return (
+    <>
+      <Text style={styles.sectionTitle}>{title}</Text>
+
+      {games.length === 0 ? (
+        <Text style={styles.noGames}>
+          {emptyMessage}
+        </Text>
+      ) : (
+        games.map((game) => (
+          <View key={game.id} style={styles.gameCard}>
+            <Text style={styles.status}>
+              {game.status_short === 'NS'
+                ? `${game.time} - Upcoming`
+                : game.status}
+            </Text>
+
+            <View style={styles.teamRow}>
+              <View style={styles.team}>
+                <Image
+                  source={{ uri: game.away_logo }}
+                  style={styles.logo}
+                />
+                <Text style={styles.teamName}>
+                  {game.away_team}
+                </Text>
+              </View>
+
+              <Text style={styles.score}>
+                {game.away_score ?? '-'}
+              </Text>
+            </View>
+
+            <View style={styles.teamRow}>
+              <View style={styles.team}>
+                <Image
+                  source={{ uri: game.home_logo }}
+                  style={styles.logo}
+                />
+                <Text style={styles.teamName}>
+                  {game.home_team}
+                </Text>
+              </View>
+
+              <Text style={styles.score}>
+                {game.home_score ?? '-'}
+              </Text>
+            </View>
+          </View>
+        ))
+      )}
+    </>
+  );
+}
+
 export default function HomeScreen() {
-  const [games, setGames] = useState<Game[]>([]);
+  const [baseballGames, setBaseballGames] = useState<Game[]>([]);
+  const [footballGames, setFootballGames] = useState<Game[]>([]);
+  const [hockeyGames, setHockeyGames] = useState<Game[]>([]);
+  const [basketballGames, setBasketballGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    async function loadGames() {
-      try {
-        const response = await fetch(
-          'http://127.0.0.1:8000/games/baseball'
-        );
+    async function fetchGames(endpoint: string) {
+    const response = await fetch(
+      `http://127.0.0.1:8000${endpoint}`
+    );
 
-        if (!response.ok) {
-          throw new Error('Could not load baseball games');
-        }
-
-        const data = await response.json();
-
-        setGames(data.games);
-      } catch (err) {
-        setError('Could not connect to the SportsDaily backend.');
-      } finally {
-        setLoading(false);
-      }
+    if (!response.ok) {
+      throw new Error(`Could not load ${endpoint}`);
     }
+
+    const data = await response.json();
+    return data.games;
+  }
+
+  async function loadGames() {
+  try {
+    const [
+      baseball,
+      football,
+      hockey,
+      basketball,
+    ] = await Promise.all([
+      fetchGames('/games/baseball'),
+      fetchGames('/games/football'),
+      fetchGames('/games/hockey'),
+      fetchGames('/games/basketball'),
+    ]);
+
+    setBaseballGames(baseball);
+    setFootballGames(football);
+    setHockeyGames(hockey);
+    setBasketballGames(basketball);
+  } catch (err) {
+    setError('Could not connect to the SportsDaily backend.');
+  } finally {
+    setLoading(false);
+  }
+}
 
     loadGames();
   }, []);
@@ -70,51 +157,32 @@ export default function HomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>TODAY SPORTS</Text>
-      <Text style={styles.sectionTitle}>MLB Games</Text>
+    <Text style={styles.title}>TODAY SPORTS</Text>
 
-      {games.map((game) => (
-        <View key={game.id} style={styles.gameCard}>
-          <Text style={styles.status}>
-            {game.status_short === 'NS'
-            ? `${game.time} - Upcoming`
-            : game.status}
-          </Text>
+    <GameSection
+      title="MLB Games"
+      games={baseballGames}
+      emptyMessage="No MLB games today."
+    />
 
-          <View style={styles.teamRow}>
-            <View style={styles.team}>
-              <Image
-                source={{ uri: game.away_logo }}
-                style={styles.logo}
-              />
-              <Text style={styles.teamName}>
-                {game.away_team}
-              </Text>
-            </View>
+    <GameSection
+      title="NFL Games"
+      games={footballGames}
+      emptyMessage="No NFL games today."
+    />
 
-            <Text style={styles.score}>
-              {game.away_score ?? '-'}
-            </Text>
-          </View>
+    <GameSection
+      title="NHL Games"
+      games={hockeyGames}
+      emptyMessage="No NHL games today."
+    />
 
-          <View style={styles.teamRow}>
-            <View style={styles.team}>
-              <Image
-                source={{ uri: game.home_logo }}
-                style={styles.logo}
-              />
-              <Text style={styles.teamName}>
-                {game.home_team}
-              </Text>
-            </View>
-
-            <Text style={styles.score}>
-              {game.home_score ?? '-'}
-            </Text>
-          </View>
-        </View>
-      ))}
-    </ScrollView>
+    <GameSection
+      title="NBA Games"
+      games={basketballGames}
+      emptyMessage="No NBA games today."
+    />
+  </ScrollView>
   );
 }
 
@@ -179,5 +247,9 @@ const styles = StyleSheet.create({
   score: {
     fontSize: 22,
     fontWeight: 'bold',
+  },
+  noGames: {
+  fontSize: 18,
+  marginBottom: 24,
   },
 });
