@@ -8,6 +8,9 @@ import {
   View,
 } from 'react-native';
 
+//const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes use either for testing
+const REFRESH_INTERVAL = 10 * 1000; // 10 seconds 
+
 type Game = {
   id: number;
   date: string;
@@ -136,7 +139,14 @@ export default function HomeScreen() {
 }
 
     loadGames();
+
+    const refreshTimer = setInterval(() => {
+      loadGames();
+    }, REFRESH_INTERVAL);
+
+    return () => clearInterval(refreshTimer);
   }, []);
+
 
   if (loading) {
     return (
