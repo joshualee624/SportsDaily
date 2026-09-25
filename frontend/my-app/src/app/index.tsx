@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,7 @@ type Game = {
   id: number;
   date: string;
   time: string;
+  timestamp: number;
   status: string;
   status_short: string;
   home_team: string;
@@ -24,6 +26,49 @@ type Game = {
   home_logo: string;
   away_logo: string;
 };
+
+function formatSelectedDate(dateString: string) {
+  const date = new Date(`${dateString}T12:00:00`);
+
+  return date.toLocaleDateString([], {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function formatGameTime(timestamp: number) {
+  const gameDate = new Date(timestamp * 1000);
+
+  return gameDate.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatGameStatus(game: Game) {
+  if (game.status_short === 'NS') {
+    return formatGameTime(game.timestamp);
+  }
+
+  if (game.status_short === 'FT') {
+    return 'FINAL';
+  }
+
+  return game.status;
+}
+
+function formatDateForApi(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+function isToday(dateString: string) {
+  return dateString === formatDateForApi(new Date());
+}
 
 type GameSectionProps = {
   title: string;
@@ -48,9 +93,7 @@ function GameSection({
         games.map((game) => (
           <View key={game.id} style={styles.gameCard}>
             <Text style={styles.status}>
-              {game.status_short === 'NS'
-                ? `${game.time} - Upcoming`
-                : game.status}
+              {formatGameStatus(game)}
             </Text>
 
             <View style={styles.teamRow}>
@@ -98,11 +141,22 @@ export default function HomeScreen() {
   const [basketballGames, setBasketballGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedDate, setSelectedDate] = useState(
+    formatDateForApi(new Date())
+  );
+
+  function changeDate(days: number) {
+    const date = new Date(`${selectedDate}T12:00:00`);
+
+    date.setDate(date.getDate() + days);
+
+    setSelectedDate(formatDateForApi(date));
+  }
 
   useEffect(() => {
     async function fetchGames(endpoint: string) {
     const response = await fetch(
-      `http://127.0.0.1:8000${endpoint}`
+      `http://127.0.0.1:8000${endpoint}?game_date=${selectedDate}`
     );
 
     if (!response.ok) {
@@ -140,12 +194,18 @@ export default function HomeScreen() {
 
     loadGames();
 
+    if (!isToday(selectedDate)) {
+      return;
+    }
+
     const refreshTimer = setInterval(() => {
       loadGames();
     }, REFRESH_INTERVAL);
 
-    return () => clearInterval(refreshTimer);
-  }, []);
+    return () => {
+      clearInterval(refreshTimer);
+    };
+  }, [selectedDate]);
 
 
   if (loading) {
@@ -168,6 +228,26 @@ export default function HomeScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
     <Text style={styles.title}>TODAY SPORTS</Text>
+
+    <View style={styles.dateNavigation}>
+      <Pressable
+        style={styles.dateButton}
+        onPress={() => changeDate(-1)}
+      >
+        <Text style={styles.dateButtonText}>←</Text>
+      </Pressable>
+
+      <Text style={styles.selectedDate}>
+        {formatSelectedDate(selectedDate)}
+      </Text>
+
+      <Pressable
+        style={styles.dateButton}
+        onPress={() => changeDate(1)}
+      >
+        <Text style={styles.dateButtonText}>→</Text>
+      </Pressable>
+    </View>
 
     <GameSection
       title="MLB Games"
@@ -259,7 +339,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   noGames: {
-  fontSize: 18,
-  marginBottom: 24,
+    fontSize: 18,
+    marginBottom: 24,
+  },
+  dateNavigation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    gap: 20,
+  },
+
+  dateButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'white',
+    borderRadius: 8,
+  },
+
+  dateButtonText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+
+  selectedDate: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    minWidth: 180,
+    textAlign: 'center',
   },
 });
