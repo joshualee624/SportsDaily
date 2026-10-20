@@ -9,8 +9,8 @@ import {
   View,
 } from 'react-native';
 
-//const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes use either for testing
-const REFRESH_INTERVAL = 10 * 1000; // 10 seconds 
+const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes use either for testing
+//const REFRESH_INTERVAL = 10 * 1000; // 10 seconds 
 
 type Game = {
   id: number;
@@ -66,6 +66,15 @@ function formatDateForApi(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function isGameOnSelectedDate(
+  game: Game,
+  selectedDate: string
+): boolean {
+  const gameDate = new Date(game.timestamp * 1000);
+
+  return formatDateForApi(gameDate) === selectedDate;
+}
+
 function isToday(dateString: string) {
   return dateString === formatDateForApi(new Date());
 }
@@ -74,21 +83,23 @@ type GameSectionProps = {
   title: string;
   games: Game[];
   emptyMessage: string;
+  error?: string;
 };
 
 function GameSection({
   title,
   games,
   emptyMessage,
+  error,
 }: GameSectionProps) {
   return (
     <>
       <Text style={styles.sectionTitle}>{title}</Text>
 
-      {games.length === 0 ? (
-        <Text style={styles.noGames}>
-          {emptyMessage}
-        </Text>
+      {error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : games.length === 0 ? (
+        <Text style={styles.noGames}>{emptyMessage}</Text>
       ) : (
         games.map((game) => (
           <View key={game.id} style={styles.gameCard}>
@@ -140,7 +151,10 @@ export default function HomeScreen() {
   const [hockeyGames, setHockeyGames] = useState<Game[]>([]);
   const [basketballGames, setBasketballGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [baseballError, setBaseballError] = useState('');
+  const [footballError, setFootballError] = useState('');
+  const [hockeyError, setHockeyError] = useState('');
+  const [basketballError, setBasketballError] = useState('');
   const [selectedDate, setSelectedDate] = useState(
     formatDateForApi(new Date())
   );
@@ -154,43 +168,98 @@ export default function HomeScreen() {
   }
 
   useEffect(() => {
-    async function fetchGames(endpoint: string) {
-    const response = await fetch(
-      `http://127.0.0.1:8000${endpoint}?game_date=${selectedDate}`
-    );
+    async function fetchGames(
+      endpoint: string,
+      gameDate: string = selectedDate
+    ): Promise<Game[]> {
+      const response = await fetch(
+        `http://127.0.0.1:8000${endpoint}?game_date=${gameDate}`
+      );
 
-    if (!response.ok) {
-      throw new Error(`Could not load ${endpoint}`);
+      if (!response.ok) {
+        throw new Error(`Could not load ${endpoint}`);
+      }
+
+      const data = await response.json();
+      return data.games;
     }
 
-    const data = await response.json();
-    return data.games;
-  }
+    async function fetchGamesForLocalDate(
+      endpoint: string
+    ): Promise<Game[]> {
+      // Start with the date selected by the user
+      const nextDate = new Date(`${selectedDate}T12:00:00`);
+      nextDate.setDate(nextDate.getDate() + 1);
 
+      const nextDateString = formatDateForApi(nextDate);
+
+      // Fetch both API dates
+      const [todayGames, nextDayGames] = await Promise.all([
+        fetchGames(endpoint, selectedDate),
+        fetchGames(endpoint, nextDateString),
+      ]);
+
+      // Combine the games
+      const combinedGames = [...todayGames, ...nextDayGames];
+
+      // Remove duplicate games
+      const uniqueGames = Array.from(
+        new Map(combinedGames.map((game) => [game.id, game])).values()
+      );
+
+      // Keep only games on the selected local date
+      return uniqueGames
+        .filter((game) => isGameOnSelectedDate(game, selectedDate))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    }
+
+  
+  
   async function loadGames() {
-  try {
-    const [
-      baseball,
-      football,
-      hockey,
-      basketball,
-    ] = await Promise.all([
-      fetchGames('/games/baseball'),
-      fetchGames('/games/football'),
-      fetchGames('/games/hockey'),
-      fetchGames('/games/basketball'),
+    const results = await Promise.allSettled([
+      fetchGamesForLocalDate('/games/baseball'),
+      fetchGamesForLocalDate('/games/football'),
+      fetchGamesForLocalDate('/games/hockey'),
+      fetchGamesForLocalDate('/games/basketball'),
     ]);
 
-    setBaseballGames(baseball);
-    setFootballGames(football);
-    setHockeyGames(hockey);
-    setBasketballGames(basketball);
-  } catch (err) {
-    setError('Could not connect to the SportsDaily backend.');
-  } finally {
+    const [baseball, football, hockey, basketball] = results;
+
+    if (baseball.status === 'fulfilled') {
+      setBaseballGames(baseball.value);
+      setBaseballError('');
+    } else {
+      setBaseballGames([]);
+      setBaseballError('Could not load MLB games.');
+    }
+
+    if (football.status === 'fulfilled') {
+      setFootballGames(football.value);
+      setFootballError('');
+    } else {
+      setFootballGames([]);
+      setFootballError('Could not load NFL games.');
+    }
+
+    if (hockey.status === 'fulfilled') {
+      setHockeyGames(hockey.value);
+      setHockeyError('');
+    } else {
+      setHockeyGames([]);
+      setHockeyError('Could not load NHL games.');
+    }
+
+    if (basketball.status === 'fulfilled') {
+      setBasketballGames(basketball.value);
+      setBasketballError('');
+    } else {
+      setBasketballGames([]);
+      setBasketballError('Could not load NBA games.');
+    }
+
     setLoading(false);
   }
-}
+
 
     loadGames();
 
@@ -213,14 +282,6 @@ export default function HomeScreen() {
       <View style={styles.center}>
         <ActivityIndicator size="large" />
         <Text style={styles.loadingText}>Loading games...</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error}</Text>
       </View>
     );
   }
@@ -252,25 +313,29 @@ export default function HomeScreen() {
     <GameSection
       title="MLB Games"
       games={baseballGames}
-      emptyMessage="No MLB games today."
+      emptyMessage="No MLB games."
+      error={baseballError}
     />
 
     <GameSection
       title="NFL Games"
       games={footballGames}
-      emptyMessage="No NFL games today."
+      emptyMessage="No NFL games."
+      error={footballError}
     />
 
     <GameSection
       title="NHL Games"
       games={hockeyGames}
-      emptyMessage="No NHL games today."
+      emptyMessage="No NHL games."
+      error={hockeyError}
     />
 
     <GameSection
       title="NBA Games"
       games={basketballGames}
-      emptyMessage="No NBA games today."
+      emptyMessage="No NBA games."
+      error={basketballError}
     />
   </ScrollView>
   );

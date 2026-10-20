@@ -85,7 +85,8 @@ def get_baseball_games(game_date: str | None = None):
     response = requests.get(
         url,
         headers=headers,
-        params=params
+        params=params,
+        timeout = 10
     )
 
     data = response.json()
@@ -140,7 +141,8 @@ def get_football_games(game_date: str | None = None):
     response = requests.get(
         url,
         headers=headers,
-        params=params
+        params=params,
+        timeout = 10
     )
 
     data = response.json()
@@ -196,7 +198,8 @@ def get_hockey_games(game_date: str | None = None):
     response = requests.get(
         url,
         headers=headers,
-        params=params
+        params=params,
+        timeout = 10
     )
 
     data = response.json()
@@ -252,7 +255,8 @@ def get_basketball_games(game_date: str | None = None):
     response = requests.get(
         url,
         headers=headers,
-        params=params
+        params=params,
+        timeout = 10
     )
 
     data = response.json()
