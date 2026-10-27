@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import requests
@@ -23,7 +23,43 @@ app.add_middleware(
 
 API_KEY = os.getenv("API_SPORTS_KEY")
 
-CACHE_DURATION = 5 * 60  # 5 minutes
+def fetch_api_data(url, game_date, sport):
+    headers = {
+        "x-apisports-key": API_KEY
+    }
+
+    params = {
+        "date": game_date
+    }
+
+    try:
+        response = requests.get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=10
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if not isinstance(data, dict) or not isinstance(data.get("response"), list):
+            raise ValueError("Unexpected API response format")
+
+        return data
+
+    except (requests.exceptions.RequestException, ValueError) as error:
+        print(f"{sport} API request failed: {error}")
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not retrieve {sport} games from API-Sports."
+        )
+
+LIVE_CACHE_DURATION = 5 * 60       # 5 minutes
+PAST_CACHE_DURATION = 24 * 60 * 60 # 24 hours
+FUTURE_CACHE_DURATION = 60 * 60    # 1 hour
 
 
 cache = {}
@@ -37,12 +73,20 @@ def get_cached_games(sport, game_date):
     if cached is None:
         return None
 
+    today = date.today().isoformat()
+
+    if game_date < today:
+        duration = PAST_CACHE_DURATION
+    elif game_date > today:
+        duration = FUTURE_CACHE_DURATION
+    else:
+        duration = LIVE_CACHE_DURATION
+
     age = time.time() - cached["timestamp"]
 
-    if age < CACHE_DURATION:
+    if age < duration:
         return cached["data"]
 
-    # Remove expired data
     del cache[cache_key]
     return None
 
@@ -73,24 +117,8 @@ def get_baseball_games(game_date: str | None = None):
     
     url = "https://v1.baseball.api-sports.io/games"
 
-    headers = {
-        "x-apisports-key": API_KEY
-    }
-
-    params = {
-        "date": today
-    }
-
-
-    response = requests.get(
-        url,
-        headers=headers,
-        params=params,
-        timeout = 10
-    )
-
-    data = response.json()
-
+    data = fetch_api_data(url, today, "MLB")
+    
     games = []
 
     for game in data["response"]:
@@ -130,22 +158,7 @@ def get_football_games(game_date: str | None = None):
 
     url = "https://v1.american-football.api-sports.io/games"
 
-    headers = {
-        "x-apisports-key": API_KEY
-    }
-
-    params = {
-        "date": today
-    }
-
-    response = requests.get(
-        url,
-        headers=headers,
-        params=params,
-        timeout = 10
-    )
-
-    data = response.json()
+    data = fetch_api_data(url, today, "NFL")
 
     games = []
 
@@ -187,22 +200,7 @@ def get_hockey_games(game_date: str | None = None):
 
     url = "https://v1.hockey.api-sports.io/games"
 
-    headers = {
-        "x-apisports-key": API_KEY
-    }
-
-    params = {
-        "date": today
-    }
-
-    response = requests.get(
-        url,
-        headers=headers,
-        params=params,
-        timeout = 10
-    )
-
-    data = response.json()
+    data = fetch_api_data(url, today, "NHL")
 
     games = []
 
@@ -244,22 +242,7 @@ def get_basketball_games(game_date: str | None = None):
 
     url = "https://v1.basketball.api-sports.io/games"
 
-    headers = {
-        "x-apisports-key": API_KEY
-    }
-
-    params = {
-        "date": today
-    }
-
-    response = requests.get(
-        url,
-        headers=headers,
-        params=params,
-        timeout = 10
-    )
-
-    data = response.json()
+    data = fetch_api_data(url, today, "NBA")
 
     games = []
 
